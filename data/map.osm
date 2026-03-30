@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="chatgpt">
+
+  <!-- ===== NODES ===== -->
+  <!-- Horizontal -->
+  <node id="1" lat="10.0000" lon="106.0000"/>
+  <node id="2" lat="10.0000" lon="106.0010"/>
+  <node id="3" lat="10.0000" lon="106.0020"/>
+
+  <!-- Vertical -->
+  <node id="4" lat="10.0010" lon="106.0010"/>
+  <node id="5" lat="9.9990" lon="106.0010"/>
+
+  <!-- ===== HORIZONTAL ROAD ===== -->
+  <way id="100">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <nd ref="3"/>
+    <tag k="highway" v="primary"/>
+    <tag k="lanes" v="2"/>
+    <tag k="oneway" v="no"/>
+    <tag k="name" v="EW"/>
+  </way>
+
+  <!-- ===== VERTICAL ROAD ===== -->
+  <way id="101">
+    <nd ref="4"/>
+    <nd ref="2"/>
+    <nd ref="5"/>
+    <tag k="highway" v="primary"/>
+    <tag k="lanes" v="2"/>
+    <tag k="oneway" v="no"/>
+    <tag k="name" v="NS"/>
+  </way>
+
+</osm>
