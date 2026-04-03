@@ -15,6 +15,7 @@ from src.twin.state_model import TrafficState
 from src.twin.state_sync import StateSync
 from src.application.risk.risk_manager import RiskManager
 from src.scenarios.logger import ScenarioLogger
+from src.application.database.services import ScenarioRunService, MetricsService
 
 
 class BaseScenario:
@@ -33,6 +34,13 @@ class BaseScenario:
         # Logging
         self.log_data = []
         self._logger = ScenarioLogger()
+
+        # Database
+        self._run_svc = ScenarioRunService()
+        self._run_svc.ensure_table()
+        self._metrics_svc = MetricsService(conn=self._run_svc.conn)
+        self._metrics_svc.ensure_tables()
+        self._run_id = None
 
     def get_name(self):
         raise NotImplementedError
@@ -88,6 +96,7 @@ class BaseScenario:
         # Export results
         self._export_csv()
         self._print_summary()
+        self._save_to_db(success=True)
         self._export_log()
         self._logger.stop()
 
@@ -165,6 +174,21 @@ class BaseScenario:
         """Export combined app + SUMO log to .log file alongside .csv."""
         if hasattr(self, '_output_basepath'):
             self._logger.export(self._output_basepath + ".log")
+
+    def _save_to_db(self, success: bool = True):
+        """Persist scenario run metadata and metrics to Postgres."""
+        try:
+            self._run_id = self._run_svc.start_run("congestion", self.get_name())
+            self._metrics_svc.insert_rows(self._run_id, "congestion", self.log_data)
+            self._run_svc.finish_run(
+                self._run_id,
+                success=success,
+                sumo_log=self._logger.get_sumo_log(),
+                app_log=self._logger.get_app_log(),
+            )
+            print(f"  [DB] Saved run {self._run_id} ({len(self.log_data)} rows)")
+        except Exception as e:
+            print(f"  [DB] Failed to save: {e}")
 
     def _print_summary(self):
         """Print summary statistics."""

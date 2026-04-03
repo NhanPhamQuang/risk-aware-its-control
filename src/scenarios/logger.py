@@ -87,6 +87,17 @@ class ScenarioLogger:
         # Print log location (goes to console only since we're about to stop)
         print(f"Log exported to: {log_filepath}")
 
+    def get_app_log(self) -> str:
+        """Return captured app console output."""
+        return "".join(self._tee.lines) if self._tee else ""
+
+    def get_sumo_log(self) -> str:
+        """Return captured SUMO process log."""
+        if self._sumo_log_file and os.path.exists(self._sumo_log_file):
+            with open(self._sumo_log_file, "r", errors="replace") as f:
+                return f.read()
+        return ""
+
     def stop(self):
         """Restore original stdout and clean up temp file."""
         if self._original_stdout:
