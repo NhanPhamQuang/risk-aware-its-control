@@ -1,6 +1,7 @@
 import os
 import subprocess
 
+
 def generate(period=1, duration=3600):
     sumo_home = os.environ.get("SUMO_HOME")
 
@@ -15,13 +16,16 @@ def generate(period=1, duration=3600):
         "-n", "network/map.net.xml",
         "-o", "demand/trips.xml",
         "-r", "demand/routes.rou.xml",
-        "--period", str(period),          # 🔥 càng nhỏ càng đông xe
+        "--period", str(period),
         "--end", str(duration),
+        "--fringe-factor", "20",
+        "--binomial", "5",   # 🔥 tạo randomness
         "--validate"
     ]
 
-    print("🚗 Generating traffic with period =", period)
+    print(f"🚗 Generating traffic with period = {period}")
     subprocess.run(cmd, check=True)
+
 
 if __name__ == "__main__":
     generate()

@@ -1,57 +1,8 @@
-# from src.physical.sumo_env import SumoEnv
-# from src.twin.state_model import TrafficState
-# from src.twin.state_sync import StateSync
-# from src.application.risk.risk_manager import RiskManager
-# from src.application.control.signal_control import SignalController
-#
-# def main():
-#     print("🚀 Starting Digital Twin...")
-#
-#     env = SumoEnv("config/simulation.sumocfg")
-#     state = TrafficState()
-#     sync = StateSync()
-#     risk_manager = RiskManager()
-#     controller = SignalController()
-#
-#     env.start()
-#     print("✅ SUMO started")
-#
-#     for step in range(1000):
-#         env.step()
-#
-#         # ===== SYNC STATE =====
-#         density, speed, queue = sync.sync()
-#         state.update(density, speed, queue)
-#
-#         # ===== DEBUG: kiểm tra có xe không =====
-#         if step % 20 == 0:
-#             print(f"\n🧠 Step {step}")
-#             print(f"   lanes detected: {len(state.density)}")
-#
-#         # ===== RISK =====
-#         risks = risk_manager.compute(state)
-#
-#         # ===== DEBUG: in sample risk =====
-#         if step % 50 == 0 and len(risks) > 0:
-#             sample_lane = list(risks.keys())[0]
-#             print(f"   sample risk ({sample_lane}): {risks[sample_lane]}")
-#
-#         # ===== CONTROL =====
-#         actions = controller.decide(state, risks)
-#         controller.apply(actions)
-#
-#     env.close()
-#     print("🛑 Simulation ended")
-#
-# if __name__ == "__main__":
-#     main()
-
-
-# from src.physical.sumo_env import SumoEnv
-# from src.twin.state_model import TrafficState
-# from src.twin.state_sync import StateSync
-# from src.application.risk.risk_manager import RiskManager
-# from src.application.control.signal_control import SignalController
+# from src.physical.environment import SumoEnv
+# from src.twin.digital_twin import TrafficState
+# from src.twin.digital_twin import StateSync
+# from src.application.risks import RiskManager
+# from src.application.control import SignalController
 #
 # def main():
 #     print("🚀 Starting Digital Twin System...")
@@ -111,33 +62,29 @@
 # if __name__ == "__main__":
 #     main()
 
-from src.physical.sumo_env import SumoEnv
-from src.twin.state_model import TrafficState
-from src.twin.state_sync import StateSync
-from src.application.risk.risk_manager import RiskManager
-# from src.application.control.signal_control import SignalController
-from src.application.control.signal_control import SignalControllerGraphAware
+from src.physical.environment import SumoEnv
+from src.twin.digital_twin import StateSync, TrafficGraph
+from src.application.risks import RiskManager
+from src.application.control import SignalController
 
-# 🔥 NEW
-from src.application.monitoring.db_logger import DBLogger
-import uuid
-import traci
+from src.twin.graph_builder import GraphBuilder  # 🔥 NEW
 
 
 def main():
-    print("🚀 Starting Digital Twin System...")
+    print("🚀 Starting Graph-based Digital Twin System...")
 
     # ===== INIT =====
     env = SumoEnv("config/simulation.sumocfg")
-    state = TrafficState()
+
+    # 🔥 BUILD GRAPH (ONE-TIME)
+    builder = GraphBuilder("network/map.net.xml")
+    G = builder.build()
+
+    graph = TrafficGraph(G)
+
     sync = StateSync()
     risk_manager = RiskManager()
-    # controller = SignalController()
-    controller = SignalControllerGraphAware()
-
-    # 🔥 DB LOGGER
-    logger = DBLogger()
-    run_id = str(uuid.uuid4())
+    controller = SignalController()
 
     # ===== START SIMULATION =====
     env.start()
@@ -148,23 +95,12 @@ def main():
     for step in range(total_steps):
         env.step()
 
-        # ===== SYNC (Physical → Twin) =====
+        # ===== SYNC (Physical → Graph State) =====
         density, speed, queue = sync.sync()
-        state.update(density, speed, queue)
+        graph.update(density, speed, queue)
 
-        # ===== RISK COMPUTATION =====
-        risks = risk_manager.compute(state)
-
-        # ===== COMPUTE METRICS =====
-        vehicle_count = traci.vehicle.getIDCount()
-
-        avg_congestion = (
-            sum(r["congestion"] for r in risks.values()) / len(risks)
-            if len(risks) > 0 else 0
-        )
-
-        # 🔥 SAVE TO DATABASE
-        logger.log(run_id, step, vehicle_count, avg_congestion)
+        # ===== RISK (GRAPH-BASED) =====
+        risks = risk_manager.compute(graph)
 
         # ===== DEBUG =====
         if step % 10 == 0 and len(risks) > 0:
@@ -172,16 +108,19 @@ def main():
 
             worst_lane = max(risks, key=lambda k: risks[k]["congestion"])
 
-            print(f"      congestion: {risks[worst_lane]['congestion']:.2f}")
-            print(f"🔥 Avg congestion: {avg_congestion:.2f}")
-            print(f"🚗 Vehicles: {vehicle_count}")
+            avg_congestion = sum(r["congestion"] for r in risks.values()) / len(risks)
+            avg_spillback = sum(r["spillback"] for r in risks.values()) / len(risks)
 
-        # ===== CONTROL =====
-        actions = controller.decide(state, risks)
-        controller.apply(actions)
+            print(f"      congestion (worst): {risks[worst_lane]['congestion']:.2f}")
+            print(f"🔥 Avg congestion: {avg_congestion:.2f}")
+            # print(f"🚗 Avg spillback: {avg_spillback:.2f}")
+
+        # ===== CONTROL (GRAPH-BASED) =====
+        actions = controller.decide(graph)
+        # controller.apply(actions)
+        controller.apply(actions, graph)
 
     # ===== END =====
-    logger.close()
     env.close()
     print("🛑 Simulation ended")
 
